@@ -25,7 +25,7 @@ static bool is_equal(const EncoderConfig &a,
 
 
 void
-FFMPEGPublisher::configure(EncoderConfig& config, int level) {
+FFMPEGPublisher::configure(EncoderConfig& config) {
     if (!is_equal(config_, config)) {
         config_ = config;
         setCodecFromConfig(config);
@@ -120,8 +120,9 @@ void FFMPEGPublisher::initializeParameters()
             if (parameter.get_name() == "performance_interval") {
                 newConfig.performance_interval = parameter.as_int();
             }
-            configure(newConfig, 5);
         }
+        configure(newConfig);
+        return result;
 
     });
 }

@@ -38,7 +38,7 @@ namespace ffmpeg_image_transport {
     colorFrame_ = NULL;
   }
 
-  bool FFMPEGDecoder::initialize(const FFMPEGPacket::ConstPtr& msg,
+  bool FFMPEGDecoder::initialize(const FFMPEGPacket::ConstSharedPtr& msg,
                                  Callback callback, const std::string &codecName) {
     callback_ = callback;
     std::string cname = codecName;
@@ -105,7 +105,7 @@ namespace ffmpeg_image_transport {
     return (true);
 	}
 
-  bool FFMPEGDecoder::decodePacket(const FFMPEGPacket::ConstPtr &msg) {
+  bool FFMPEGDecoder::decodePacket(const FFMPEGPacket::ConstSharedPtr &msg) {
     rclcpp::Clock ros_clock(RCL_SYSTEM_TIME);
     rclcpp::Time t0;
     if (measurePerformance_) {

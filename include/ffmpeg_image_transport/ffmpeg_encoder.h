@@ -31,13 +31,13 @@ extern "C" {
 namespace ffmpeg_image_transport {
   using Image = sensor_msgs::msg::Image;
   using ImagePtr = sensor_msgs::msg::Image::SharedPtr;
-  using ImageConstPtr = sensor_msgs::msg::Image::ConstPtr;
+  using ImageConstPtr = sensor_msgs::msg::Image::ConstSharedPtr;
   typedef std::unordered_map<int64_t, rclcpp::Time> PTSMap;
 
   class FFMPEGEncoder {
     using FFMPEGPacket = ffmpeg_image_transport_msgs::msg::FFMPEGPacket;
     using FFMPEGPacketConstPtr =
-      ffmpeg_image_transport_msgs::msg::FFMPEGPacket::ConstPtr;
+      ffmpeg_image_transport_msgs::msg::FFMPEGPacket::ConstSharedPtr;
     typedef std::unique_lock<std::recursive_mutex> Lock;
     typedef std::function<void(const FFMPEGPacketConstPtr &pkt)> Callback;
   public:

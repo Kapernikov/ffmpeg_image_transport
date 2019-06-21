@@ -9,7 +9,7 @@
 namespace ffmpeg_image_transport {
 
   void FFMPEGSubscriber::frameReady(const ImageConstPtr &img,
-                                    bool isKeyFrame) const {
+                                    bool) const {
     (*userCallback_)(img);
   }
 
@@ -27,11 +27,11 @@ namespace ffmpeg_image_transport {
     qos1.depth = queue_size;
     this->decoder_ = std::make_shared<FFMPEGDecoder>(node->get_logger());
     FFMPEGSubscriberPlugin::subscribeImpl(node, base_topic,
-                                          callback, custom_qos
+                                          callback, qos1
                                           );
   }
 
-  void FFMPEGSubscriber::internalCallback(const FFMPEGPacket::ConstPtr& msg,
+  void FFMPEGSubscriber::internalCallback(const FFMPEGPacket::ConstSharedPtr& msg,
                                         const Callback& user_cb) {
     if (!decoder_->isInitialized()) {
       if (msg->flags == 0) {

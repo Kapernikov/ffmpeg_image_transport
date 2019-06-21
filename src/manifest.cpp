@@ -1,4 +1,4 @@
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 #include "ffmpeg_image_transport/ffmpeg_publisher.h"
 #include "ffmpeg_image_transport/ffmpeg_subscriber.h"
 

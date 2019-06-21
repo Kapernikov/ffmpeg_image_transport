@@ -27,7 +27,7 @@ extern "C" {
 namespace ffmpeg_image_transport {
   using Image = sensor_msgs::msg::Image;
   using ImagePtr = sensor_msgs::msg::Image::SharedPtr;
-  using ImageConstPtr = sensor_msgs::msg::Image::ConstPtr;
+  using ImageConstPtr = sensor_msgs::msg::Image::ConstSharedPtr;
   using FFMPEGPacket = ffmpeg_image_transport_msgs::msg::FFMPEGPacket;
   typedef std::unordered_map<int64_t, rclcpp::Time> PTSMap;
 
@@ -41,13 +41,13 @@ namespace ffmpeg_image_transport {
     // Initialize decoder upon first packet received,
     // providing callback to be called when frame is complete.
     // You must still call decodePacket(msg) afterward!
-    bool initialize(const FFMPEGPacket::ConstPtr& msg, Callback callback,
+    bool initialize(const FFMPEGPacket::ConstSharedPtr& msg, Callback callback,
                     const std::string &codec=std::string());
 
     // clears all state, but leaves config intact
     void reset();
     // decode packet (may result in frame callback!)
-    bool decodePacket(const FFMPEGPacket::ConstPtr &msg);
+    bool decodePacket(const FFMPEGPacket::ConstSharedPtr &msg);
     void setMeasurePerformance(bool p) {
       measurePerformance_ = p;
     }

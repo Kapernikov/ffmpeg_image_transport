@@ -12,7 +12,7 @@
 namespace ffmpeg_image_transport {
   using Image         = sensor_msgs::msg::Image;
   using ImagePtr      = sensor_msgs::msg::Image::SharedPtr;
-  using ImageConstPtr = sensor_msgs::msg::Image::ConstPtr;
+  using ImageConstPtr = sensor_msgs::msg::Image::ConstSharedPtr;
   
   typedef image_transport::SimpleSubscriberPlugin<
     ffmpeg_image_transport_msgs::msg::FFMPEGPacket>  FFMPEGSubscriberPlugin;
@@ -26,7 +26,7 @@ namespace ffmpeg_image_transport {
 
   protected:
     virtual void
-    internalCallback(const typename FFMPEGPacket::ConstPtr& message,
+    internalCallback(const typename FFMPEGPacket::ConstSharedPtr& message,
                      const Callback& user_cb) override;
 
     virtual void subscribeImpl(

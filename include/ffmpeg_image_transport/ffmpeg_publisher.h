@@ -31,12 +31,12 @@ namespace ffmpeg_image_transport {
 
   class FFMPEGPublisher : public FFMPEGPublisherPlugin {
     typedef std::unique_lock<std::recursive_mutex> Lock;
-    using FFMPEGPacketConstPtr = ffmpeg_image_transport_msgs::msg::FFMPEGPacket::ConstPtr;
+    using FFMPEGPacketConstPtr = ffmpeg_image_transport_msgs::msg::FFMPEGPacket::ConstSharedPtr;
   public:
     virtual std::string getTransportName() const override {
       return "ffmpeg";
     }
-    void configure(EncoderConfig& config, int level);
+    void configure(EncoderConfig& config);
 
   protected:
     // override to set up reconfigure server
