@@ -50,7 +50,7 @@ namespace ffmpeg_image_transport {
   private:
     void packetReady(const FFMPEGPacketConstPtr &pkt);
     void setCodecFromConfig(const EncoderConfig &cfg);
-    void initConfigServer();
+    void initializeParameters();
     // variables ---------
     rclcpp::Node *    nh_;
     const PublishFn              *publishFunction_{NULL};
