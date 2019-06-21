@@ -3,8 +3,8 @@
  */
 
 #include "ffmpeg_image_transport/ffmpeg_encoder.h"
-#include "ffmpeg_image_transport_msgs/FFMPEGPacket.h"
-#include <sensor_msgs/Image.h>
+#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
+#include <sensor_msgs/msg/image.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -13,7 +13,7 @@
 
 namespace ffmpeg_image_transport {
 
-  FFMPEGEncoder::FFMPEGEncoder() {
+  FFMPEGEncoder::FFMPEGEncoder(rclcpp::Logger l): logger(l) {
     // must init the packet and set the pointers to zero
     // in case a closeCodec() happens right away,
     // and av_packet_unref() is called.
@@ -93,14 +93,14 @@ namespace ffmpeg_image_transport {
 
       if (av_opt_set(codecContext_->priv_data, "profile", profile_.c_str(),
                      AV_OPT_SEARCH_CHILDREN) != 0) {
-        ROS_ERROR_STREAM("cannot set profile: " << profile_);
+        RCLCPP_ERROR(logger, "cannot set profile: %s", profile_.c_str());
       }
 
       if (av_opt_set(codecContext_->priv_data, "preset", preset_.c_str(),
                      AV_OPT_SEARCH_CHILDREN) != 0) {
-        ROS_ERROR_STREAM("cannot set preset: " << preset_);
+        RCLCPP_ERROR(logger, "cannot set preset: %s", preset_.c_str());
       }
-      ROS_DEBUG("codec: %10s, profile: %10s, preset: %10s,"
+      RCLCPP_DEBUG(logger, "codec: %10s, profile: %10s, preset: %10s,"
                 " bit_rate: %10ld qmax: %2d",
                 codecName_.c_str(), profile_.c_str(),
                 preset_.c_str(), bitRate_, qmax_);
@@ -113,7 +113,7 @@ namespace ffmpeg_image_transport {
       if (avcodec_open2(codecContext_, codec, NULL) < 0)  {
         throw (std::runtime_error("cannot open codec!"));
       }
-      ROS_DEBUG_STREAM("opened codec: " << codecName_);
+      RCLCPP_DEBUG(logger, "opened codec: %s", codecName_.c_str());
       frame_ = av_frame_alloc();
       if (!frame_)  {
         throw (std::runtime_error("cannot alloc frame!"));
@@ -131,7 +131,7 @@ namespace ffmpeg_image_transport {
       packet_.data = NULL;    // packet data will be allocated by the encoder
       packet_.size = 0;
     } catch (const std::runtime_error &e) {
-      ROS_ERROR_STREAM(e.what());
+      RCLCPP_ERROR(logger, e.what());
       if (codecContext_) {
         avcodec_close(codecContext_);
         codecContext_ = NULL;
@@ -142,31 +142,33 @@ namespace ffmpeg_image_transport {
       }
       return (false);
     }
-    ROS_DEBUG_STREAM("intialized codec " << codecName_ << " for image: "
-                     << width << "x" << height);
+    RCLCPP_DEBUG(logger, "intialized codec %s for image %i x %i", codecName_.c_str(),
+                     width , height);
     return (true);
 	}
 
-  void FFMPEGEncoder::encodeImage(const sensor_msgs::Image &msg) {
-    ros::WallTime t0;
-    if (measurePerformance_) { t0 = ros::WallTime::now(); }
+  void FFMPEGEncoder::encodeImage(const sensor_msgs::msg::Image &msg) {
+    rclcpp::Clock clock(RCL_SYSTEM_TIME);
+    rclcpp::Time t0;
+    if (measurePerformance_) { t0 = clock.now(); }
     cv::Mat img =
       cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8)->image;
     encodeImage(img, msg.header, t0);
     if (measurePerformance_) {
-      const auto t1 = ros::WallTime::now();
-      tdiffDebayer_.update((t1-t0).toSec());
+      const auto t1 = clock.now();
+      tdiffDebayer_.update((t1-t0).seconds());
     }
   }
 
   void FFMPEGEncoder::encodeImage(const cv::Mat &img,
-                                  const std_msgs::Header &header,
-                                  const ros::WallTime &t0) {
+                                  const std_msgs::msg::Header &header,
+                                  const rclcpp::Time &t0) {
+    rclcpp::Clock clock(RCL_SYSTEM_TIME);
     Lock lock(mutex_);
-    ros::WallTime t1, t2, t3;
+    rclcpp::Time t1, t2, t3;
     if (measurePerformance_) {
       frameCnt_++;
-      t1 = ros::WallTime::now();
+      t1 = clock.now();
       totalInBytes_ += img.cols * img.rows; // raw size!
     }
 
@@ -184,13 +186,13 @@ namespace ffmpeg_image_transport {
       memcpy(frame_->data[1], p + width*height, width*height / 4);
       memcpy(frame_->data[2], p + width*(height + height/4), (width*height)/4);
     } else {
-      ROS_ERROR_STREAM("cannot convert format bgr8 -> "
-                       << " -> " << codecContext_->pix_fmt);
+      RCLCPP_ERROR(logger, "cannot convert format bgr8 -> %i"
+                       , codecContext_->pix_fmt);
       return;
     }
     if (measurePerformance_) {
-      t2 = ros::WallTime::now();
-      tdiffFrameCopy_.update((t2 - t1).toSec());
+      t2 = clock.now();
+      tdiffFrameCopy_.update((t2 - t1).seconds());
     }
 
     frame_->pts = pts_++; //
@@ -198,29 +200,30 @@ namespace ffmpeg_image_transport {
 
     int ret = avcodec_send_frame(codecContext_, frame_);
     if (measurePerformance_) {
-      t3 = ros::WallTime::now();
-      tdiffSendFrame_.update((t3 - t2).toSec());
+      t3 = clock.now();
+      tdiffSendFrame_.update((t3 - t2).seconds());
     }
     // now drain all packets
     while (ret == 0) {
       ret = drainPacket(header, width, height);
     }
     if (measurePerformance_) {
-      const ros::WallTime t4 = ros::WallTime::now();
-      tdiffTotal_.update((t4-t0).toSec());
+      const rclcpp::Time t4 = clock.now();
+      tdiffTotal_.update((t4-t0).seconds());
     }
   }
 
-  int FFMPEGEncoder::drainPacket(const std_msgs::Header &header,
+  int FFMPEGEncoder::drainPacket(const std_msgs::msg::Header &header,
                                  int width, int height) {
-    ros::WallTime t0, t1, t2;
+      rclcpp::Clock clock(RCL_SYSTEM_TIME);
+    rclcpp::Time t0, t1, t2;
     if (measurePerformance_) {
-      t0 = ros::WallTime::now();
+      t0 = clock.now();
     }
     int ret = avcodec_receive_packet(codecContext_, &packet_);
     if (measurePerformance_) {
-      t1 = ros::WallTime::now();
-      tdiffReceivePacket_.update((t1 - t0).toSec());
+      t1 = clock.now();
+      tdiffReceivePacket_.update((t1 - t0).seconds());
     }
     const AVPacket &pk = packet_;
     if (ret == 0 && packet_.size > 0) {
@@ -233,9 +236,9 @@ namespace ffmpeg_image_transport {
       packet->flags      = pk.flags;
       memcpy(&(packet->data[0]), packet_.data, packet_.size);
       if (measurePerformance_) {
-        t2 = ros::WallTime::now();
+        t2 = clock.now();
         totalOutBytes_ += packet_.size;
-        tdiffCopyOut_.update((t2 - t1).toSec());
+        tdiffCopyOut_.update((t2 - t1).seconds());
       }
       packet->header = header;
       auto it = ptsToStamp_.find(pk.pts);
@@ -244,12 +247,12 @@ namespace ffmpeg_image_transport {
         packet->encoding = codecName_ ;
         callback_(pptr);  // deliver packet callback
         if (measurePerformance_) {
-          const ros::WallTime t3 = ros::WallTime::now();
-          tdiffPublish_.update((t3 - t2).toSec());
+          const rclcpp::Time t3 = clock.now();
+          tdiffPublish_.update((t3 - t2).seconds());
         }
         ptsToStamp_.erase(it);
       } else {
-        ROS_ERROR_STREAM("pts " << pk.pts << " has no time stamp!");
+        RCLCPP_ERROR(logger, "pts %i has no time stamp!", pk.pts);
       }
       av_packet_unref(&packet_); // free packet allocated by encoder
       av_init_packet(&packet_); // prepare next one
@@ -259,7 +262,8 @@ namespace ffmpeg_image_transport {
 
   void FFMPEGEncoder::printTimers(const std::string &prefix) const {
     Lock lock(mutex_);
-    ROS_INFO_STREAM(prefix
+    std::stringstream ss;
+    ss << prefix
                     << " pktsz: " << totalOutBytes_ / frameCnt_
                     << " compr: " << totalInBytes_ / (double)totalOutBytes_
                     << " debay: " << tdiffDebayer_
@@ -269,7 +273,8 @@ namespace ffmpeg_image_transport {
                     << " cout: " << tdiffCopyOut_
                     << " publ: " << tdiffPublish_
                     << " tot: " << tdiffTotal_
-      );
+      ;
+    RCLCPP_INFO(logger, ss.str());
   }
   void FFMPEGEncoder::resetTimers() {
     Lock lock(mutex_);

@@ -12,8 +12,8 @@ namespace ffmpeg_image_transport {
     (*publishFunction_)(*pkt);
   }
 
-  static bool is_equal(const EncoderDynConfig &a,
-                       const EncoderDynConfig &b) {
+  static bool is_equal(const EncoderConfig &a,
+                       const EncoderConfig &b) {
     return (a.encoder  == b.encoder &&
             a.profile  == b.profile &&
             a.qmax     == b.qmax &&
@@ -23,89 +23,70 @@ namespace ffmpeg_image_transport {
   }
   
   void
-  FFMPEGPublisher::configure(EncoderDynConfig& config, int level) {
+  FFMPEGPublisher::configure(EncoderConfig& config, int level) {
     if (!is_equal(config_, config)) {
       config_ = config;
       setCodecFromConfig(config);
-      encoder_.reset(); // will be opened on next image
+      encoder_->reset(); // will be opened on next image
     }
   }
 
+
   void FFMPEGPublisher::advertiseImpl(
-    ros::NodeHandle &nh,
-    const std::string &base_topic,
-    uint32_t queue_size,
-    const image_transport::SubscriberStatusCallback  &conn_cb,
-    const image_transport::SubscriberStatusCallback  &disconn_cb,
-    const ros::VoidPtr &tracked_object, bool latch) {
-    const std::string transportTopic = getTopicToAdvertise(base_topic);
-    nh_.reset(new ros::NodeHandle(transportTopic));
+      rclcpp::Node * node, const std::string & base_topic,
+          rmw_qos_profile_t custom_qos) {
+    const std::string transportTopic =  getTopicToAdvertise(base_topic);
+    this->nh_ = node;
+    //nh_.reset(new ros::NodeHandle(transportTopic));
     initConfigServer();
     // make the queue twice the size between keyframes.
-    queue_size = std::max((int)queue_size, 2 * config_.gop_size);
-    FFMPEGPublisherPlugin::advertiseImpl(nh, base_topic, queue_size,
-                                         conn_cb, disconn_cb, tracked_object, latch);
+    auto queue_size = std::max((int)custom_qos.depth, 2 * config_.gop_size);
+    rmw_qos_profile_t qos1 = custom_qos;
+    qos1.depth = queue_size;
+    this->encoder_ = std::make_shared<FFMPEGEncoder>(node->get_logger());
+    FFMPEGPublisherPlugin::advertiseImpl(node, base_topic, qos1);
   }
 
-  void FFMPEGPublisher::setCodecFromConfig(const EncoderDynConfig &config) {
-    encoder_.setCodec(config.encoder);
-    encoder_.setProfile(config.profile);
-    encoder_.setPreset(config.preset);
-    encoder_.setQMax(config.qmax);
-    encoder_.setBitRate(config.bit_rate);
-    encoder_.setGOPSize(config.gop_size);
-    encoder_.setMeasurePerformance(config.measure_performance);
-    ROS_DEBUG_STREAM("FFMPEGPublisher codec: " << config.encoder <<
+  void FFMPEGPublisher::setCodecFromConfig(const EncoderConfig &config) {
+    encoder_->setCodec(config.encoder);
+    encoder_->setProfile(config.profile);
+    encoder_->setPreset(config.preset);
+    encoder_->setQMax(config.qmax);
+    encoder_->setBitRate(config.bit_rate);
+    encoder_->setGOPSize(config.gop_size);
+    encoder_->setMeasurePerformance(config.measure_performance);
+    std::stringstream ss;
+    ss << "FFMPEGPublisher codec: " << config.encoder <<
                     ", profile: " << config.profile <<
                     ", preset: " << config.preset <<
                     ", bit rate: " << config.bit_rate <<
-                    ", qmax: " << config.qmax);
+                    ", qmax: " << config.qmax;
+    RCLCPP_DEBUG(nh_->get_logger(), ss.str());
   }
 
 
   void
-  FFMPEGPublisher::publish(const sensor_msgs::Image& message,
+  FFMPEGPublisher::publish(const sensor_msgs::msg::Image& message,
                            const PublishFn &publish_fn) const {
     FFMPEGPublisher *me = const_cast<FFMPEGPublisher *>(this);
-    if (!me->encoder_.isInitialized()) {
+    if (!me->encoder_->isInitialized()) {
       me->initConfigServer();
       me->publishFunction_ = &publish_fn;
-      if (!me->encoder_.initialize(message.width, message.height,
-              boost::bind(&FFMPEGPublisher::packetReady, me, ::_1))) {
-        ROS_ERROR_STREAM("cannot initialize encoder!");
+      if (!me->encoder_->initialize(message.width, message.height,
+              std::bind(&FFMPEGPublisher::packetReady, me, std::placeholders::_1))) {
+        RCLCPP_ERROR(me->nh_->get_logger(),"cannot initialize encoder!");
         return;
       }
     }
-    me->encoder_.encodeImage(message); // may trigger packetReady() callback(s) from encoder!
+    me->encoder_->encodeImage(message); // may trigger packetReady() callback(s) from encoder!
     Lock lock(me->configMutex_);
     if (me->config_.measure_performance) {
       if (++me->frameCounter_ > (unsigned int)me->config_.performance_interval) {
-        me->encoder_.printTimers(nh_->getNamespace());
-        me->encoder_.resetTimers();
+        me->encoder_->printTimers(nh_->get_namespace());
+        me->encoder_->resetTimers();
         me->frameCounter_ = 0;
       }
     }
   }
-
-  void FFMPEGPublisher::initConfigServer() {
-    Lock lock(configMutex_);
-    if (!configServer_) {
-      configServer_.reset(new ConfigServer(*nh_));
-      // this will trigger an immediate callback!
-      configServer_->setCallback(boost::bind(&FFMPEGPublisher::configure, this, _1, _2));
-    }
-  }
   
-  void FFMPEGPublisher::connectCallback(
-    const ros::SingleSubscriberPublisher &pub) {
-    ROS_DEBUG_STREAM("FFMPEGPublisher: connect() now has subscribers: "
-                     << getNumSubscribers());
-    initConfigServer();
-  }
-
-  void FFMPEGPublisher::disconnectCallback(
-    const ros::SingleSubscriberPublisher &pub) {
-    ROS_DEBUG_STREAM("FFMPEGPublisher: disconnect() subscribers left: "
-                     << getNumSubscribers());
-  }
 }

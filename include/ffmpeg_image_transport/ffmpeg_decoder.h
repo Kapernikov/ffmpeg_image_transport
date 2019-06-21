@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "ffmpeg_image_transport_msgs/FFMPEGPacket.h"
+#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
 #include "ffmpeg_image_transport/tdiff.h"
 
-#include <ros/ros.h>
-#include <sensor_msgs/Image.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 #include <memory>
 #include <unordered_map>
@@ -25,17 +25,17 @@ extern "C" {
 
 
 namespace ffmpeg_image_transport {
-  using Image = sensor_msgs::Image;
-  using ImagePtr = sensor_msgs::ImagePtr;
-  using ImageConstPtr = sensor_msgs::ImageConstPtr;
-  using FFMPEGPacket = ffmpeg_image_transport_msgs::FFMPEGPacket;
-  typedef std::unordered_map<int64_t, ros::Time> PTSMap;
+  using Image = sensor_msgs::msg::Image;
+  using ImagePtr = sensor_msgs::msg::Image::SharedPtr;
+  using ImageConstPtr = sensor_msgs::msg::Image::ConstPtr;
+  using FFMPEGPacket = ffmpeg_image_transport_msgs::msg::FFMPEGPacket;
+  typedef std::unordered_map<int64_t, rclcpp::Time> PTSMap;
 
   class FFMPEGDecoder {
   public:
-    typedef boost::function<void(const ImageConstPtr &img,
+    typedef std::function<void(const ImageConstPtr &img,
                                  bool isKeyFrame)> Callback;
-    FFMPEGDecoder();
+    FFMPEGDecoder(rclcpp::Logger logger);
     ~FFMPEGDecoder();
     bool isInitialized() const { return (codecContext_ != NULL); }
     // Initialize decoder upon first packet received,
@@ -67,6 +67,7 @@ namespace ffmpeg_image_transport {
     TDiff             tdiffTotal_;
     // libav stuff
     std::string       encoding_;
+    rclcpp::Logger   logger;
     AVCodecContext   *codecContext_{NULL};
     AVFrame          *decodedFrame_{NULL};
     AVFrame          *colorFrame_{NULL};

@@ -10,6 +10,9 @@ namespace ffmpeg_image_transport {
   class TDiff {
   public:
     friend std::ostream &operator<<(std::ostream &os, const TDiff &td);
+
+    std::string to_string() const;
+
     inline void update(double dt) {
       duration_ += dt;
       cnt_++;

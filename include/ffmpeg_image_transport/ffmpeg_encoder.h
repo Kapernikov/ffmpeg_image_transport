@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "ffmpeg_image_transport_msgs/FFMPEGPacket.h"
+#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
 #include "ffmpeg_image_transport/tdiff.h"
 
-#include <ros/ros.h>
-#include <sensor_msgs/Image.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <opencv2/core/core.hpp>
 
 #include <memory>
@@ -29,19 +29,19 @@ extern "C" {
 
 
 namespace ffmpeg_image_transport {
-  using Image = sensor_msgs::Image;
-  using ImagePtr = sensor_msgs::ImagePtr;
-  using ImageConstPtr = sensor_msgs::ImageConstPtr;
-  typedef std::unordered_map<int64_t, ros::Time> PTSMap;
+  using Image = sensor_msgs::msg::Image;
+  using ImagePtr = sensor_msgs::msg::Image::SharedPtr;
+  using ImageConstPtr = sensor_msgs::msg::Image::ConstPtr;
+  typedef std::unordered_map<int64_t, rclcpp::Time> PTSMap;
 
   class FFMPEGEncoder {
-    using FFMPEGPacket = ffmpeg_image_transport_msgs::FFMPEGPacket;
+    using FFMPEGPacket = ffmpeg_image_transport_msgs::msg::FFMPEGPacket;
     using FFMPEGPacketConstPtr =
-      ffmpeg_image_transport_msgs::FFMPEGPacketConstPtr;
+      ffmpeg_image_transport_msgs::msg::FFMPEGPacket::ConstPtr;
     typedef std::unique_lock<std::recursive_mutex> Lock;
-    typedef boost::function<void(const FFMPEGPacketConstPtr &pkt)> Callback;
+    typedef std::function<void(const FFMPEGPacketConstPtr &pkt)> Callback;
   public:
-    FFMPEGEncoder();
+    FFMPEGEncoder(rclcpp::Logger logger);
     ~FFMPEGEncoder();
     // ------- various encoding settings
     void setCodec(const std::string &n) {
@@ -89,18 +89,18 @@ namespace ffmpeg_image_transport {
     void reset();
     // encode image
     void encodeImage(const cv::Mat &img,
-                     const std_msgs::Header &header, const ros::WallTime &t0);
-    void encodeImage(const sensor_msgs::Image &msg);
+                     const std_msgs::msg::Header &header, const rclcpp::Time &t0);
+    void encodeImage(const sensor_msgs::msg::Image &msg);
     // ------- performance statistics
     void printTimers(const std::string &prefix) const;
     void resetTimers();
   private:
     bool openCodec(int width, int height);
     void closeCodec();
-    int  drainPacket(const std_msgs::Header &hdr, int width, int height);
+    int  drainPacket(const std_msgs::msg::Header &hdr, int width, int height);
     // --------- variables
     mutable std::recursive_mutex mutex_;
-    boost::function<void(const FFMPEGPacketConstPtr &pkt)> callback_;
+    std::function<void(const FFMPEGPacketConstPtr &pkt)> callback_;
     // config
     std::string       codecName_;
     std::string       preset_;
@@ -117,6 +117,7 @@ namespace ffmpeg_image_transport {
     AVPacket          packet_;
     int64_t           pts_{0};
     PTSMap            ptsToStamp_;
+    rclcpp::Logger    logger;
     // performance analysis
     bool              measurePerformance_{true};
     int64_t           totalInBytes_{0};

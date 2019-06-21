@@ -11,5 +11,13 @@ namespace ffmpeg_image_transport {
       td.duration_ * (td.cnt_ > 0 ? 1.0 / (double)td.cnt_ : 0);
     return os;
   }
+
+  std::string TDiff::to_string() const
+  {
+    std::stringstream s;
+    s << (*this);
+    return s.str();
+  }
+
  
 }  // namespace

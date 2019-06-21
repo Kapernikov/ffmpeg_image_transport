@@ -3,7 +3,7 @@
  */
 
 #include "ffmpeg_image_transport/ffmpeg_decoder.h"
-#include <sensor_msgs/Image.h>
+#include <sensor_msgs/msg/image.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -12,7 +12,7 @@
 
 namespace ffmpeg_image_transport {
 
-  FFMPEGDecoder::FFMPEGDecoder() {
+  FFMPEGDecoder::FFMPEGDecoder(rclcpp::Logger l) : logger(l) {
     codecMap_["h264_nvenc"] = {"h264"};
     codecMap_["libx264"]    = {"h264"};
     codecMap_["hevc_nvenc"] = {"hevc_cuvid", "hevc"};
@@ -47,7 +47,7 @@ namespace ffmpeg_image_transport {
       // try and find the right codec from the map
       const auto it = codecMap_.find(msg->encoding);
       if (it == codecMap_.end()) {
-        ROS_ERROR_STREAM("unknown encoding: " << msg->encoding);
+        RCLCPP_ERROR(logger, "unknown encoding: %s", msg->encoding.c_str());
         return (false);
       }
       cname  = msg->encoding;
@@ -67,19 +67,19 @@ namespace ffmpeg_image_transport {
       for (const auto &c: codecs) {
         codec = avcodec_find_decoder_by_name(c.c_str());
         if (!codec) {
-          ROS_WARN_STREAM("no codec " << c << " found!");
+          RCLCPP_WARN(logger, "no codec %s found", c.c_str());
           continue;
         }
         codecContext_ = avcodec_alloc_context3(codec);
         if (!codecContext_) {
-          ROS_WARN_STREAM("alloc context failed for " + codecName);
+          RCLCPP_WARN(logger,"alloc context failed for %s", codecName.c_str());
           codec = NULL;
           continue;
         }
         codecContext_->width  = width;
         codecContext_->height = height;
         if (avcodec_open2(codecContext_, codec, NULL) < 0) {
-          ROS_WARN_STREAM("open context failed for " + codecName);
+          RCLCPP_WARN(logger, "open context failed for ", codecName.c_str());
           av_free(codecContext_);
           codecContext_ = NULL;
           codec = NULL;
@@ -97,21 +97,22 @@ namespace ffmpeg_image_transport {
 
 
     } catch (const std::runtime_error &e) {
-      ROS_ERROR_STREAM(e.what());
+      RCLCPP_ERROR(logger, e.what());
       reset();
       return (false);
     }
-    ROS_INFO_STREAM("using decoder " << codecName);
+    RCLCPP_INFO(logger, "using decoder %s", codecName.c_str());
     return (true);
 	}
 
   bool FFMPEGDecoder::decodePacket(const FFMPEGPacket::ConstPtr &msg) {
-    ros::WallTime t0;
+    rclcpp::Clock ros_clock(RCL_SYSTEM_TIME);
+    rclcpp::Time t0;
     if (measurePerformance_) {
-      t0 = ros::WallTime::now();
+      t0 = ros_clock.now();
     }
     if (msg->encoding != encoding_) {
-      ROS_ERROR_STREAM("cannot change encoding on the fly!!!");
+      RCLCPP_ERROR(logger,"cannot change encoding on the fly!!!");
       return (false);
     }
     AVCodecContext *ctx = codecContext_;
@@ -124,7 +125,7 @@ namespace ffmpeg_image_transport {
     ptsToStamp_[packet.pts] = msg->header.stamp;
     int ret = avcodec_send_packet(ctx, &packet);
     if (ret != 0) {
-      ROS_WARN_STREAM("send_packet failed for pts: " <<  msg->pts);
+      RCLCPP_WARN(logger, "send_packet failed for pts: %i",  msg->pts);
       av_packet_unref(&packet);
       return (false);
     }
@@ -137,13 +138,13 @@ namespace ffmpeg_image_transport {
           ctx->width, ctx->height, (AVPixelFormat)colorFrame_->format, // dest
           SWS_FAST_BILINEAR, NULL, NULL, NULL);
         if (!swsContext_) {
-          ROS_ERROR("cannot allocate sws context!!!!");
-          ros::shutdown();
+          RCLCPP_ERROR(logger,"cannot allocate sws context!!!!");
+          rclcpp::shutdown();
           return (false);
         }
       }
       // prepare the decoded message
-      ImagePtr image(new sensor_msgs::Image());
+      ImagePtr image(new sensor_msgs::msg::Image());
       image->height = decodedFrame_->height;
       image->width  = decodedFrame_->width;
       image->step   = image->width * 3; // 3 bytes per pixel
@@ -160,8 +161,8 @@ namespace ffmpeg_image_transport {
                 ctx->height, colorFrame_->data, colorFrame_->linesize); // dest
       auto it = ptsToStamp_.find(decodedFrame_->pts);
       if (it == ptsToStamp_.end()) {
-        ROS_ERROR_STREAM("cannot find pts that matches "
-                         << decodedFrame_->pts);
+        RCLCPP_ERROR(logger,"cannot find pts that matches %i",
+                          decodedFrame_->pts);
       } else {
         image->header = msg->header;
         image->header.stamp = it->second;
@@ -171,8 +172,8 @@ namespace ffmpeg_image_transport {
     }
     av_packet_unref(&packet);
     if (measurePerformance_) {
-      ros::WallTime t1 = ros::WallTime::now();
-      double dt = (t1-t0).toSec();
+      rclcpp::Time t1 = ros_clock.now();
+      double dt = (t1-t0).seconds();
       tdiffTotal_.update(dt);
     }
     return (true);
@@ -183,7 +184,7 @@ namespace ffmpeg_image_transport {
   }
 
   void FFMPEGDecoder::printTimers(const std::string &prefix) const {
-    ROS_INFO_STREAM(prefix << " total decode: " << tdiffTotal_);
+    RCLCPP_INFO(logger, "%s total decode: ", prefix.c_str(), tdiffTotal_.to_string().c_str());
   }
  
 }  // namespace

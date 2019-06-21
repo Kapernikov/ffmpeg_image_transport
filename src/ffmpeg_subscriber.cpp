@@ -13,34 +13,38 @@ namespace ffmpeg_image_transport {
     (*userCallback_)(img);
   }
 
+
   void FFMPEGSubscriber::subscribeImpl(
-    ros::NodeHandle &nh, const std::string &base_topic,
-    uint32_t queue_size, const Callback &callback,
-    const ros::VoidPtr &tracked_object,
-    const image_transport::TransportHints &transport_hints) {
+      rclcpp::Node * node,
+      const std::string & base_topic,
+      const Callback & callback,
+          rmw_qos_profile_t custom_qos) {
     // bump queue size a bit to avoid lost packets
-    nh.param<std::string>("decoder_type", decoderType_, "");
-    queue_size = std::max((int)queue_size, 20);
-    FFMPEGSubscriberPlugin::subscribeImpl(nh, base_topic,
-                                          queue_size, callback,
-                                          tracked_object,
-                                          transport_hints);
+    this->node = node;
+    this->decoderType_ = node->declare_parameter("decoder_type",rclcpp::ParameterValue("")).get<std::string>();
+    auto queue_size = std::max((int)custom_qos.depth, 20);
+    auto qos1 = custom_qos;
+    qos1.depth = queue_size;
+    this->decoder_ = std::make_shared<FFMPEGDecoder>(node->get_logger());
+    FFMPEGSubscriberPlugin::subscribeImpl(node, base_topic,
+                                          callback, custom_qos
+                                          );
   }
 
   void FFMPEGSubscriber::internalCallback(const FFMPEGPacket::ConstPtr& msg,
                                         const Callback& user_cb) {
-    if (!decoder_.isInitialized()) {
+    if (!decoder_->isInitialized()) {
       if (msg->flags == 0) {
         return; // wait for key frame!
       }
       userCallback_ = &user_cb;
-      if (!decoder_.initialize(
-            msg, boost::bind(&FFMPEGSubscriber::frameReady, this, ::_1, ::_2),
+      if (!decoder_->initialize(
+            msg, std::bind(&FFMPEGSubscriber::frameReady, this, std::placeholders::_1, std::placeholders::_2),
             decoderType_)) {
-        ROS_ERROR_STREAM("cannot initialize decoder!");
+        RCLCPP_ERROR(node->get_logger(),"cannot initialize decoder!");
         return;
       }
     }
-    decoder_.decodePacket(msg);
+    decoder_->decodePacket(msg);
   }
 }
