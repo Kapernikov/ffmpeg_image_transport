@@ -24,7 +24,7 @@ namespace ffmpeg_image_transport {
     this->decoderType_ = node->declare_parameter("decoder_type",rclcpp::ParameterValue("")).get<std::string>();
     auto queue_size = std::max((int)custom_qos.depth, 20);
     auto qos1 = custom_qos;
-    qos1.depth = queue_size;
+    //qos1.depth = queue_size; // todo fix later
     this->decoder_ = std::make_shared<FFMPEGDecoder>(node->get_logger());
     FFMPEGSubscriberPlugin::subscribeImpl(node, base_topic,
                                           callback, qos1

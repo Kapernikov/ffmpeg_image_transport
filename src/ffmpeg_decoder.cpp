@@ -15,6 +15,7 @@ namespace ffmpeg_image_transport {
   FFMPEGDecoder::FFMPEGDecoder(rclcpp::Logger l) : logger(l) {
     codecMap_["h264_nvenc"] = {"h264"};
     codecMap_["libx264"]    = {"h264"};
+    codecMap_["mjpeg"]    = {"mjpeg"};
     codecMap_["hevc_nvenc"] = {"hevc_cuvid", "hevc"};
   }
 
@@ -167,7 +168,7 @@ namespace ffmpeg_image_transport {
         image->header = msg->header;
         image->header.stamp = it->second;
         ptsToStamp_.erase(it);
-        callback_(image, decodedFrame_->key_frame == 1); // deliver callback
+        callback_(image, decodedFrame_->key_frame == 1); // deliver     callback
       }
     }
     av_packet_unref(&packet);

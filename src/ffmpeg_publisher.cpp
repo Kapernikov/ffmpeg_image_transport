@@ -39,17 +39,24 @@ void FFMPEGPublisher::advertiseImpl(
         rmw_qos_profile_t custom_qos) {
     const std::string transportTopic =  getTopicToAdvertise(base_topic);
     this->nh_ = node;
-    initializeParameters();
     // make the queue twice the size between keyframes.
     auto queue_size = std::max((int)custom_qos.depth, 2 * config_.gop_size);
     rmw_qos_profile_t qos1 = custom_qos;
-    qos1.depth = queue_size;
+    //qos1.depth = queue_size;
     this->encoder_ = std::make_shared<FFMPEGEncoder>(node->get_logger());
+    initializeParameters();
+    this->setCodecFromConfig(this->config_);
     FFMPEGPublisherPlugin::advertiseImpl(node, base_topic, qos1);
 }
 
 void FFMPEGPublisher::setCodecFromConfig(const EncoderConfig &config) {
+    RCLCPP_WARN(nh_->get_logger(), "setting codec to %s", config.encoder.c_str());
     encoder_->setCodec(config.encoder);
+    if (config.encoder == "mjpeg") {
+        encoder_->setPixFormat(AV_PIX_FMT_YUVJ420P);
+    } else {
+        encoder_->setPixFormat(AV_PIX_FMT_YUV420P);
+    }
     encoder_->setProfile(config.profile);
     encoder_->setPreset(config.preset);
     encoder_->setQMax(config.qmax);
@@ -67,7 +74,7 @@ void FFMPEGPublisher::setCodecFromConfig(const EncoderConfig &config) {
 
 void FFMPEGPublisher::initializeParameters()
 {
-    config_.encoder = nh_->declare_parameter("encoder", rclcpp::ParameterValue("hevc_nvenc")).get<std::string>();
+    config_.encoder = nh_->declare_parameter("encoder", rclcpp::ParameterValue("libx264")).get<std::string>();
     config_.profile = nh_->declare_parameter("profile", rclcpp::ParameterValue("main")).get<std::string>();
     config_.preset = nh_->declare_parameter("preset", rclcpp::ParameterValue("slow")).get<std::string>();
     config_.qmax = nh_->declare_parameter("qmax", rclcpp::ParameterValue(10)).get<unsigned int>();

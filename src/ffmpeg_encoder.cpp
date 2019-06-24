@@ -38,6 +38,11 @@ namespace ffmpeg_image_transport {
       avcodec_close(codecContext_);
       codecContext_ = NULL;
     }
+    if (swsContext_) {
+      sws_freeContext(swsContext_);
+      swsContext_ = NULL;
+    }
+
     if (frame_) {
       av_free(frame_);
       frame_ = 0;
@@ -90,6 +95,9 @@ namespace ffmpeg_image_transport {
       // check with e.g.: ffmpeg -h encoder=h264_nvenc -pix_fmts
 
       codecContext_->pix_fmt = pixFormat_;
+
+
+
 
       if (av_opt_set(codecContext_->priv_data, "profile", profile_.c_str(),
                      AV_OPT_SEARCH_CHILDREN) != 0) {
@@ -176,19 +184,27 @@ namespace ffmpeg_image_transport {
     const int width  = img.cols;
     const int height = img.rows;
     const AVPixelFormat targetFmt = codecContext_->pix_fmt;
+
+    if (!swsContext_) {
+      swsContext_ = sws_getContext(
+        width, height, AV_PIX_FMT_BGR0, //src
+        width, height, targetFmt, // dest
+        SWS_FAST_BILINEAR, NULL, NULL, NULL);
+      if (!swsContext_) {
+        RCLCPP_ERROR(logger,"cannot allocate sws context!!!!");
+        rclcpp::shutdown();
+        return;
+      }
+    }
+
+
+
     if (targetFmt == AV_PIX_FMT_BGR0) {
       memcpy(frame_->data[0], p, width * height * 3);
-    } else if (targetFmt == AV_PIX_FMT_YUV420P) {
-      cv::Mat yuv;
-      cv::cvtColor(img, yuv, cv::COLOR_BGR2YUV_I420);
-      const uint8_t *p = yuv.data;
-      memcpy(frame_->data[0], p,  width*height);
-      memcpy(frame_->data[1], p + width*height, width*height / 4);
-      memcpy(frame_->data[2], p + width*(height + height/4), (width*height)/4);
     } else {
-      RCLCPP_ERROR(logger, "cannot convert format bgr8 -> %i"
-                       , codecContext_->pix_fmt);
-      return;
+      const int in_linesize[1] = { 3 * width };
+      sws_scale(swsContext_, (const uint8_t * const *)&p, in_linesize, 0,
+                height, frame_->data, frame_->linesize);
     }
     if (measurePerformance_) {
       t2 = clock.now();
@@ -260,11 +276,21 @@ namespace ffmpeg_image_transport {
     return (ret);
   }
 
+  AVPixelFormat FFMPEGEncoder::pixFormat() const
+  {
+      return pixFormat_;
+  }
+
+  void FFMPEGEncoder::setPixFormat(const AVPixelFormat &pixFormat)
+  {
+      pixFormat_ = pixFormat;
+  }
+
   void FFMPEGEncoder::printTimers(const std::string &prefix) const {
-    Lock lock(mutex_);
-    std::stringstream ss;
-    ss << prefix
-                    << " pktsz: " << totalOutBytes_ / frameCnt_
+      Lock lock(mutex_);
+      std::stringstream ss;
+      ss << prefix
+         << " pktsz: " << totalOutBytes_ / frameCnt_
                     << " compr: " << totalInBytes_ / (double)totalOutBytes_
                     << " debay: " << tdiffDebayer_
                     << " fmcp: " << tdiffFrameCopy_

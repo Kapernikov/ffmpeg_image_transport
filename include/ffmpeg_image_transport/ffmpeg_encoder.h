@@ -94,6 +94,9 @@ namespace ffmpeg_image_transport {
     // ------- performance statistics
     void printTimers(const std::string &prefix) const;
     void resetTimers();
+    AVPixelFormat pixFormat() const;
+    void setPixFormat(const AVPixelFormat &pixFormat);
+
   private:
     bool openCodec(int width, int height);
     void closeCodec();
@@ -106,6 +109,7 @@ namespace ffmpeg_image_transport {
     std::string       preset_;
     std::string       profile_;
     AVPixelFormat     pixFormat_{AV_PIX_FMT_YUV420P};
+    //AVPixelFormat     pixFormat_{AV_PIX_FMT_YUVJ420P};
     AVRational        timeBase_{1, 40};
     AVRational        frameRate_{40, 1};
     int               GOPSize_{15};
@@ -113,6 +117,7 @@ namespace ffmpeg_image_transport {
     int               qmax_{0};
     // libav state
     AVCodecContext    *codecContext_{NULL};
+    SwsContext        *swsContext_{NULL};
     AVFrame           *frame_{NULL};
     AVPacket          packet_;
     int64_t           pts_{0};
