@@ -77,7 +77,7 @@ void FFMPEGPublisher::initializeParameters()
     config_.encoder = nh_->declare_parameter("encoder", rclcpp::ParameterValue("libx264")).get<std::string>();
 
     config_.profile = nh_->declare_parameter("profile", rclcpp::ParameterValue("main")).get<std::string>();
-    config_.preset = nh_->declare_parameter("preset", rclcpp::ParameterValue("slow")).get<std::string>();
+    config_.preset = nh_->declare_parameter("preset", rclcpp::ParameterValue("ultrafast")).get<std::string>();
     config_.qmax = nh_->declare_parameter("qmax", rclcpp::ParameterValue(10)).get<unsigned int>();
     config_.bit_rate = nh_->declare_parameter("bit_rate", rclcpp::ParameterValue(8242880)).get<unsigned int>();
     config_.gop_size = nh_->declare_parameter("gop_size", rclcpp::ParameterValue(15)).get<unsigned int>();
