@@ -75,6 +75,7 @@ void FFMPEGPublisher::setCodecFromConfig(const EncoderConfig &config) {
 void FFMPEGPublisher::initializeParameters()
 {
     config_.encoder = nh_->declare_parameter("encoder", rclcpp::ParameterValue("libx264")).get<std::string>();
+
     config_.profile = nh_->declare_parameter("profile", rclcpp::ParameterValue("main")).get<std::string>();
     config_.preset = nh_->declare_parameter("preset", rclcpp::ParameterValue("slow")).get<std::string>();
     config_.qmax = nh_->declare_parameter("qmax", rclcpp::ParameterValue(10)).get<unsigned int>();
@@ -140,6 +141,7 @@ FFMPEGPublisher::publish(const sensor_msgs::msg::Image& message,
                          const PublishFn &publish_fn) const {
     FFMPEGPublisher *me = const_cast<FFMPEGPublisher *>(this);
     if (!me->encoder_->isInitialized()) {
+        RCLCPP_ERROR(me->nh_->get_logger(), "init %i x %i s=%i %s %i", message.width, message.height, message.step, message.encoding.c_str(), message.data.size());
         me->publishFunction_ = &publish_fn;
         if (!me->encoder_->initialize(message.width, message.height,
                                       std::bind(&FFMPEGPublisher::packetReady, me, std::placeholders::_1))) {

@@ -151,6 +151,7 @@ namespace ffmpeg_image_transport {
       image->step   = image->width * 3; // 3 bytes per pixel
       image->encoding = sensor_msgs::image_encodings::BGR8;
       image->data.resize(image->step * image->height);
+      //std::cerr << "d " << decodedFrame_->width << "x" << decodedFrame_->height << "l" << colorFrame_->linesize[0] << "ll " << decodedFrame_->linesize[0] << std::endl;
 
       // bend the memory pointers in colorFrame to the right locations 
       av_image_fill_arrays(colorFrame_->data,  colorFrame_->linesize,

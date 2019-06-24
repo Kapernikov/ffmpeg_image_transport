@@ -187,7 +187,7 @@ namespace ffmpeg_image_transport {
 
     if (!swsContext_) {
       swsContext_ = sws_getContext(
-        width, height, AV_PIX_FMT_BGR0, //src
+        width, height, AV_PIX_FMT_BGR24, //src
         width, height, targetFmt, // dest
         SWS_FAST_BILINEAR, NULL, NULL, NULL);
       if (!swsContext_) {
@@ -202,9 +202,10 @@ namespace ffmpeg_image_transport {
     if (targetFmt == AV_PIX_FMT_BGR0) {
       memcpy(frame_->data[0], p, width * height * 3);
     } else {
-      const int in_linesize[1] = { 3 * width };
+      const int in_linesize[1] = { (int)img.step[0] };
       sws_scale(swsContext_, (const uint8_t * const *)&p, in_linesize, 0,
                 height, frame_->data, frame_->linesize);
+      //RCLCPP_WARN(logger, "sws: %i %i %i %i %i" , in_linesize[0], frame_->linesize[0],frame_->linesize[1],frame_->linesize[2],frame_->linesize[3]);
     }
     if (measurePerformance_) {
       t2 = clock.now();
